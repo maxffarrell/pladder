@@ -83,8 +83,9 @@ On this Mac: Apple M4 Max, macOS 27.0.1 (26A434), Xcode 27.0 (27A266a).
   downloads exercise the app's HTTP download, size/hash verification,
   extraction, local loading and transcription path.
 - Native light/dark HUD screenshots were inspected during development. Fresh
-  captures of the final build failed under macOS screen-capture permissions;
-  the native UI inspection tool also timed out. The word entrance animation
+  captures of the final build failed with "could not create image from window";
+  the native UI inspection tool also timed out. The exact capture failure
+  cause was not established. The word entrance animation
   still needs a fresh visual check. Screenshot mode now reports failure
   instead of claiming it wrote images. The real coordinator's six demo paths completed: plain, delayed, slow,
   clipboard fallback, polish, and short polish bypass. These use stand-ins
