@@ -1,5 +1,7 @@
 # Benchmarks
 
+> Historical upstream FluidAudio measurements. For this Core AI fork, see [COREAI.md](COREAI.md).
+
 How Pladder's speed is measured, and the baseline to compare against. The
 benchmark is run by hand before and after any change on the release-to-paste
 path (see [CLAUDE.md](../CLAUDE.md)). It is not part of the test suite: a

@@ -169,14 +169,14 @@ final class AppModel {
         // Engines, in the order the settings picker shows them. The first
         // entry is the default for new installs.
         var registry = EngineRegistry()
-        registry.register(
-            EngineRegistry.Entry(
-                id: FluidAudioIncrementalEngine.engineID,
-                displayName: "Parakeet TDT v3",
-                detail: String(localized: "NVIDIA Parakeet via FluidAudio, runs on the Neural Engine. ~700 MB download on first use."),
-                make: { FluidAudioIncrementalEngine() }
-            )
-        )
+        for model in CoreAIParakeetModel.allCases {
+            registry.register(.init(
+                id: model.engineID,
+                displayName: model.displayName,
+                detail: String(localized: "Apple Core AI · on-device · 25 languages"),
+                make: { CoreAIParakeetEngine(model: model) }
+            ))
+        }
         #if DEBUG
         registry.register(
             EngineRegistry.Entry(
@@ -191,7 +191,7 @@ final class AppModel {
 
         let store = SettingsStore(
             url: Self.settingsURL,
-            defaults: Settings(engineID: FluidAudioIncrementalEngine.engineID)
+            defaults: Settings(engineID: CoreAIParakeetModel.v3.engineID)
         )
         // A test copy starts from the defaults, not from an old install.
         if Self.settingsPathOverride == nil {
@@ -210,6 +210,7 @@ final class AppModel {
         if registry.entry(for: initial.engineID) == nil,
             let fallback = registry.available.first {
             initial.engineID = fallback.id
+            initial.overlayStyle = .liveTranscript
         }
 
         // Processors, in pipeline order; the list and its reasons are in

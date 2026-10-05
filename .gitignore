@@ -8,3 +8,6 @@ dist/
 .DS_Store
 .build-*/
 bench/
+
+__pycache__/
+*.pyc

@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import SwiftUI
 import PladderCore
 
@@ -9,6 +10,7 @@ import PladderCore
 /// in use. `scripts/make-screenshots.sh` wraps it.
 @MainActor
 enum Screenshots {
+    private static var captureFailed = false
     /// The output directory when the flag is present, nil for a normal launch.
     static var directory: URL? {
         let args = CommandLine.arguments
@@ -17,23 +19,32 @@ enum Screenshots {
     }
 
     static func run(into directory: URL) async {
+        captureFailed = false
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         for scheme in [ColorScheme.light, .dark] {
             let suffix = scheme == .dark ? "dark" : "light"
             // Four tiles of 290 pt with 24 pt between them and 16 pt of
             // padding either side.
+            await capture(AnimatedHUDFigure(), size: CGSize(width: 720, height: 320), scheme: scheme,
+                          to: directory.appending(path: "hud-word-entrance-\(suffix).png"), wait: .milliseconds(1000))
+            await capture(HUDFigure(text: String(repeating: "The morning train crossed the quiet river. ", count: 20) + "These are the newest words, still clear and steady."),
+                          size: CGSize(width: 720, height: 320), scheme: scheme,
+                          to: directory.appending(path: "hud-long-\(suffix).png"))
+            await capture(HUDFigure(), size: CGSize(width: 720, height: 320), scheme: scheme,
+                          to: directory.appending(path: "hud-\(suffix).png"))
             await capture(StylesFigure(), size: CGSize(width: 1264, height: 250), scheme: scheme,
                           to: directory.appending(path: "styles-\(suffix).png"))
         }
         await capture(SocialFigure(), size: CGSize(width: 1280, height: 640), scheme: .dark,
                       to: directory.appending(path: "social-preview.png"))
 
+        if captureFailed { exit(EXIT_FAILURE) }
         NSApp.terminate(nil)
     }
 
     /// Shows `figure` in a transparent borderless window and captures it.
-    private static func capture<Figure: View>(_ figure: Figure, size: CGSize, scheme: ColorScheme, to url: URL) async {
+    private static func capture<Figure: View>(_ figure: Figure, size: CGSize, scheme: ColorScheme, to url: URL, wait: Duration = .milliseconds(700)) async {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless],
@@ -54,7 +65,7 @@ enum Screenshots {
         window.center()
         window.orderFrontRegardless()
         // Layout, and the glass sampling its backdrop.
-        try? await Task.sleep(for: .milliseconds(700))
+        try? await Task.sleep(for: wait)
         capture(window: window, to: url)
         window.orderOut(nil)
     }
@@ -68,10 +79,18 @@ enum Screenshots {
         process.executableURL = URL(filePath: "/usr/sbin/screencapture")
         process.arguments = ["-x", "-l", String(window.windowNumber), url.path]
         do {
+            try? FileManager.default.removeItem(at: url)
             try process.run()
             process.waitUntilExit()
+            guard process.terminationStatus == 0,
+                  FileManager.default.fileExists(atPath: url.path) else {
+                captureFailed = true
+                print("screenshots: capture failed for \(url.lastPathComponent) (exit \(process.terminationStatus)); check Screen Recording permission")
+                return
+            }
             print("wrote \(url.path)")
         } catch {
+            captureFailed = true
             print("screenshots: \(error)")
         }
     }
@@ -217,5 +236,33 @@ private struct SocialFigure: View {
                         .padding(.top, 24)
                 }
             }
+    }
+}
+
+private struct HUDFigure: View {
+    var text = "Let's make this feel calm and effortless. Every word arrives when it is ready."
+    var body: some View {
+        ZStack {
+            Wallpaper()
+            Pill(state: .recording(level: 0.6), style: .liveTranscript,
+                 partial: text)
+        }
+    }
+}
+
+private struct AnimatedHUDFigure: View {
+    @State private var text = "Every word"
+    var body: some View {
+        ZStack {
+            Wallpaper()
+            OverlayPill(state: .recording(level: 0.6), style: .liveTranscript, glass: true,
+                        partial: text)
+                .fixedSize()
+                .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            text = "Every word arrives when it is ready."
+        }
     }
 }

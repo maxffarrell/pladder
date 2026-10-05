@@ -1,6 +1,6 @@
 # Pladder
 
-Push-to-talk dictation for macOS 26 on Apple Silicon. Hold a key, speak, release, and the words are pasted where the cursor is. Everything runs on the Mac.
+Push-to-talk dictation for macOS 27 on Apple Silicon. Hold a key, speak, release, and the words are pasted where the cursor is. Everything runs on the Mac.
 
 ## What the project optimises for
 
@@ -35,12 +35,11 @@ swift run -c release pladder-cli polish-set docs/polish-set.json --model s1-mini
 
 | Topic | Choice | Why |
 |---|---|---|
-| Platform | macOS 26+, Apple Silicon only | FluidAudio needs the Neural Engine |
+| Platform | macOS 27+, Apple Silicon only | Apple Core AI framework |
 | Distribution | Direct, not sandboxed, not App Store | Global hotkey and synthetic paste do not work sandboxed |
 | Language | Swift 6.2 tools, strict concurrency, SwiftUI | Current toolchain |
 | Build | SwiftPM package + `scripts/bundle.sh` wrapping the binary in `Pladder.app` | No Xcode project to maintain; `Package.swift` opens in Xcode |
-| Engine | FluidAudio, Parakeet TDT 0.6B v3, one engine only | Fastest Swift-native option, runs on the Neural Engine. The recording is transcribed in windows while the key is held, so only the last window and the merge are left at release |
-| FluidAudio | A fork, branch `incremental-chunks`, pinned in `Package.resolved` | Adds `IncrementalChunkProcessor`: the same windows the batch path uses, run as the audio arrives. Offered upstream; goes back to the release line when it lands |
+| Engine | Apple CoreAISpeech, v3 / Ultra / Redux | Pinned streaming FP16 exports; one resident engine, buffered decoding during capture |
 | Hotkey | Hold Option+Space by default, either Option; any key or chord can be recorded | A CGEvent tap (Accessibility, no Input Monitoring) matches the chord and swallows its regular key so it never reaches the target app. Sides are ignored in a chord with a regular key and kept for a modifier-only chord, so the tap and Carbon agree |
 | Interrupted press | A non-chord key within 1 s of the chord press cancels the recording without transcribing | Anyone who records a lone Command key shares it with Cmd+C, Cmd+V and Cmd+Tab; the overlay waits 150 ms before showing so those never flash it. Option+Space shares no modifier with them |
 | Secure Event Input | `IsSecureEventInputEnabled()` polled with the grant; sustained 3 s and a chord Carbon can register → Carbon monitor until it clears | A password field or Terminal's Secure Keyboard Entry stops taps receiving key events; modifier-only chords are unaffected and stay on the tap |
@@ -60,7 +59,7 @@ swift run -c release pladder-cli polish-set docs/polish-set.json --model s1-mini
 
 ## Pluggability rules
 
-- `PladderCore` imports Foundation only. It never imports FluidAudio, AVFoundation or AppKit, so tests compile fast and engines are truly swappable.
+- `PladderCore` imports Foundation only. It never imports CoreAISpeech, AVFoundation or AppKit, so tests compile fast and engines are truly swappable.
 - Adding an engine: implement `TranscriptionEngine` in its own file under `PladderEngines`, register it in the `EngineRegistry` built in `AppModel`. One file plus one registry line; the settings picker reads the registry. The engine lifecycle — building, loading, status polling and swapping — lives in `EngineLoader`.
 - Adding a processor: implement `TextProcessor` in its own file, append a factory to `StandardProcessors.factories` in `PladderSystem`, which the app and `pladder-cli --process` both build from. The pipeline is rebuilt when settings change, never per dictation. A processor sits on the critical path, so the benchmark rule applies.
 - Adding a polish model: a `PolishModel` case in `Settings`, a `ModelFile` pinned to a commit with its SHA-256 if it downloads, a `TranscriptRefiner` in `PladderRefine`, and a branch in `AppModel.applyPolishModel`; `PolishRouter` hands it the calls, the picker and `polish-set` read the enum. Judge it with `pladder-cli polish-set` before it goes in.
@@ -73,9 +72,9 @@ swift run -c release pladder-cli polish-set docs/polish-set.json --model s1-mini
 ## Risks
 
 - **Audio format.** The microphone delivers 48 kHz; the engine wants 16 kHz mono Float32. Conversion is isolated in `AudioResampler` and unit tested against synthesised buffers.
-- **First launch.** About 700 MB of CoreML models download from Hugging Face and compile on first load. The menu shows progress and the hotkey is disabled until the engine is ready.
+- **First launch.** The selected Core AI archive downloads from a pinned Hugging Face revision and is SHA-256 verified before installation (about 1.17 GB for v3/Ultra, 345 MB for Redux compressed; 1.2 GB installed each). The menu shows progress and the hotkey is disabled until the engine is ready.
 - **Cold latency.** The engine loads at launch and stays resident. The audio engine is prepared at launch and runs only while the key is held, so the system microphone indicator is off when idle. A cold encoder pass costs about 110 ms more than a warm one, which is more than every other stage together, so the coordinator warms the Neural Engine every two seconds while the key is held. A release that lands inside a warm pass waits for it: the signature is `engine` well above `engine-time`.
-- **Long recordings.** FluidAudio's encoder window is 15 s. Longer audio is split into windows and stitched, and seams can drop or duplicate words. Those windows now run while the key is held rather than at release, so the wait is flat with length, but the seam risk is unchanged: it is the same layout and the same merge. The paced benchmark guards it by requiring the text to be byte-identical to transcribing the whole recording at once, and the 30 s to 10 min fixtures watch the word error rate.
+- **Long recordings.** Collect every CoreAISpeech finalized segment. `finishStream()` returns only the last segment; returning it alone silently loses earlier speech. Paced and unpaced ingestion must agree, with live display reads enabled. See docs/COREAI.md for current measurements.
 - **Polish latency and quality.** Apple's model takes about 1.5 to 2 seconds warm on an M1 for a typical dictation, S1-mini 0.3 to 0.5, and both are capped at eight; past the cap the text is pasted as dictated. A small model can still rewrite rather than clean; for Apple's the guided `cleanedText` field, greedy sampling, inline examples and naming the transcript's language keep that rare. S1-mini's known slips are in docs/BENCHMARKS.md, the worst a German number word read wrong, which real dictation rarely feeds it since Parakeet writes digits. `pladder-cli polish-set` is where model and prompt changes are judged.
 - **Polish model memory.** S1-mini stays loaded while chosen and polish is on: about 0.8 or 1.5 GB of weights plus a 235 MB key-value cache for its 2,048-token context. Long dictations are polished in chunks of about 250 words to fit.
 - **Clipboard clobbering.** Output saves the pasteboard, pastes, and restores it once the target app has read the transcript. Nothing read within 8 s leaves the transcript on the clipboard that long, never stale text in the target.

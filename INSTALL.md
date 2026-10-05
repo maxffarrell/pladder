@@ -2,15 +2,15 @@
 
 ## Requirements
 
-- macOS 26 or later.
+- macOS 27 or later.
 - An Apple Silicon Mac (M1 or newer). The speech model runs on the Neural Engine.
-- Xcode 26 (Swift 6.2 or later) to build. There is no binary release yet.
+- Xcode 27 (Swift 6.3 or later) to build. There is no binary release yet.
 - About 700 MB of disk for the speech model, downloaded once.
 
 ## Build and install
 
 ```sh
-git clone https://github.com/dinooo13/pladder.git
+git clone --branch codex/coreai-dictation https://github.com/maxffarrell/pladder.git
 cd pladder
 ./scripts/bundle.sh --install --run
 ```
@@ -25,7 +25,7 @@ This compiles a release build, wraps it into `Pladder.app`, signs it, copies it 
    On a standard (non-administrator) account, ticking that box asks for an administrator password, so ask an admin to do it once — the grant is keyed to the app's code signature and survives updates. Without it Pladder still works in a reduced form: Option+Space works the same, any combination with a regular key can be recorded in Settings (a modifier-only key such as Right Command needs Accessibility, and Option+Space stands in for it until then), and the transcript is left on the clipboard for you to paste with ⌘V. Managed Macs can pre-approve Accessibility for Pladder with an MDM Privacy Preferences Policy Control (PPPC) profile, which needs no prompt at all.
 
    Apple Intelligence, if it is on, powers learned corrections and, if you pick it, the experimental polish; nothing else needs it.
-3. **Wait for the model.** The first run downloads the Parakeet TDT v3 CoreML models from Hugging Face into `~/Library/Application Support/FluidAudio/Models` and compiles them. The menu bar icon shows progress, and the push-to-talk key is disabled until the engine is ready. This happens once; later launches load in well under a second.
+3. **Wait for the model.** The first run downloads the selected Parakeet Core AI bundle from Hugging Face into `~/Library/Application Support/Pladder/CoreAI` and compiles them. The menu bar icon shows progress, and the push-to-talk key is disabled until the engine is ready. This happens once; later launches reuse the verified local files.
 
 Then click into any text field, hold **Option+Space**, say something, and let go.
 
@@ -46,7 +46,7 @@ The install step quits the running copy and replaces it. Because the app is sign
 
 1. Quit Pladder from the menu bar.
 2. Delete `/Applications/Pladder.app`.
-3. Optionally delete the settings in `~/Library/Application Support/Pladder` and the models in `~/Library/Application Support/FluidAudio`.
+3. Optionally delete the settings in `~/Library/Application Support/Pladder` and the models in `~/Library/Application Support/Pladder/CoreAI`.
 4. Optionally remove Pladder from Privacy & Security > Accessibility and > Microphone in System Settings.
 
 ## Building for development
@@ -106,7 +106,7 @@ Check the menu bar menu. If it says the model is loading or downloading, wait. I
 The app was signed ad-hoc. Install a development certificate so the signature stays stable; see [Signing](#signing).
 
 **The model download failed.**
-The menu offers **Retry Model Download**. The files come from Hugging Face; a proxy or firewall that blocks it will stop the download. Once the models are in `~/Library/Application Support/FluidAudio/Models`, no network is needed again.
+The menu offers **Retry Model Download**. The files come from Hugging Face; a proxy or firewall that blocks it will stop the download. Once the models are in `~/Library/Application Support/Pladder/CoreAI`, no network is needed again.
 
 **Text is pasted into the wrong app.**
 Pladder pastes into whatever has keyboard focus when the key is released. Click into the target field before holding the key.

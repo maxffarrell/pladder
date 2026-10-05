@@ -188,7 +188,7 @@ func appSettings() -> Settings {
     let url = ProcessInfo.processInfo.environment["PLADDER_SETTINGS_PATH"].flatMap { $0.isEmpty ? nil : URL(filePath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser
             .appending(path: "Library/Application Support/Pladder/settings.json")
-    let fallback = Settings(engineID: FluidAudioIncrementalEngine.engineID)
+    let fallback = Settings(engineID: CoreAIParakeetModel.v3.engineID)
     guard let data = try? Data(contentsOf: url) else { return fallback }
     do {
         return try JSONDecoder().decode(Settings.self, from: data)
@@ -198,9 +198,15 @@ func appSettings() -> Settings {
     }
 }
 
+func selectedSpeechEngine() -> CoreAIParakeetEngine {
+    let selected = ProcessInfo.processInfo.environment["PLADDER_SPEECH_MODEL"]
+        .flatMap(CoreAIParakeetModel.init(rawValue:)) ?? .v3
+    return CoreAIParakeetEngine(model: selected)
+}
+
 func transcribeFile(_ path: String, process: Bool, verbose: Bool) async {
     do {
-        let engine = FluidAudioIncrementalEngine()
+        let engine = selectedSpeechEngine()
         let loadTime = try await loadEngine(engine)
         if verbose { print(String(format: "model ready in %.1fs", seconds(loadTime))) }
 
@@ -272,7 +278,7 @@ func runBench(dir: String, runs: Int, pause: Double) async throws {
 
     let chip = sysctlString("machdep.cpu.brand_string") ?? "unknown chip"
     let os = ProcessInfo.processInfo.operatingSystemVersionString
-    let engine = FluidAudioIncrementalEngine()
+    let engine = selectedSpeechEngine()
     print("Pladder benchmark")
     print("machine: \(chip), macOS \(os)")
     print("model:   \(engine.id) (\(engine.displayName))")
@@ -382,7 +388,7 @@ func runPacedBench(dir: String, runs: Int, pause: Double, includeShort: Bool, li
     // One engine, two ways in. The paced path feeds it while the audio
     // arrives; `transcribe` hands it the whole buffer, which is the call a
     // recording transcribed at release makes. Comparing the two is the gate.
-    let engine = FluidAudioIncrementalEngine()
+    let engine = selectedSpeechEngine()
     print("Pladder benchmark (paced)")
     print("machine: \(chip), macOS \(os)")
     print("model:   \(engine.id) (\(engine.displayName))")

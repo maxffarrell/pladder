@@ -192,7 +192,7 @@ struct OverlayPill: View {
                 // transitions below), so the row is still faint while the
                 // capsule is small; this clip keeps it inside the capsule
                 // rather than poking out of the disc.
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .animation(animationSpeed.morphAnimation, value: flying)
                 .modifier(PillBackground(glass: glass, namespace: glassNamespace))
         }
@@ -340,19 +340,27 @@ struct OverlayPill: View {
     private var liveContent: some View {
         switch state {
         case .recording(let level):
-            HStack(spacing: 10) {
-                RecordingDot()
-                LevelBars(level: level, count: 8, maxHeight: 24, opacity: 1, seeded: isPreview)
-                LiveTranscriptText(
-                    text: partial ?? "",
-                    hugs: hugsContent,
-                    width: hugsContent ? Self.previewTextWidth : Self.liveTextWidth
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    LevelBars(level: level, count: 5, maxHeight: 16, opacity: 1, seeded: isPreview)
+                        .foregroundStyle(.cyan)
+                    Text("Listening")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    RecordingDot(size: 5)
+                }
+                if let partial, !partial.isEmpty {
+                    LiveTranscriptText(text: partial, hugs: hugsContent,
+                                       width: hugsContent ? Self.previewTextWidth : Self.liveTextWidth, animate: !isPreview)
+                } else {
+                    Text("Start speaking…")
+                        .font(LiveTranscriptText.font)
+                        .foregroundStyle(.secondary)
+                }
             }
-            // A capsule whose width changed with the text would jitter on
-            // every pass, so the row is a fixed width; its height follows the
-            // number of lines, one to three.
             .frame(width: hugsContent ? nil : Self.liveRowWidth, alignment: .leading)
+            .frame(minHeight: hugsContent ? nil : 72, alignment: .topLeading)
         default:
             compactContent
         }
@@ -363,13 +371,9 @@ struct OverlayPill: View {
     /// shadow.
     static let liveRowWidth: CGFloat = 404
 
-    /// What the dot, the eight bars and the two 10 pt gaps take of that row.
-    /// The bars are 3 pt wide with 3 pt between them.
-    private static let liveRowLead: CGFloat = 8 + 10 + (8 * 3 + 7 * 3) + 10
-
-    /// What is left of the row for the words. The text measures itself against
-    /// this to decide how much of the tail fits in three lines.
-    static var liveTextWidth: CGFloat { liveRowWidth - liveRowLead }
+    /// The text measures itself against this fixed width
+    /// to decide how much of the tail fits in three lines.
+    static var liveTextWidth: CGFloat { liveRowWidth }
 
     /// The words in a settings card: wide enough for two short lines, so the
     /// card reads as text beside the meter rather than a long thin pill.
@@ -435,79 +439,98 @@ struct OverlayPill: View {
     }
 }
 
-/// The words so far, with the part that has not settled yet in secondary.
-///
-/// Every live pass re-decodes the audio and returns a whole new string, so the
-/// layout can change anywhere in it. Nothing here animates: a cross-fade
-/// between two layouts draws both at once, which is unreadable at two passes a
-/// second. Each pass simply replaces the text. The only thing carried between
-/// passes is the common prefix with the previous string, which is the part the
-/// engine has stopped changing; what came after it is drawn in secondary, so
-/// the eye can see where the settled words end.
+/// Only the engine's committed words arrive here. Absolute word identities
+/// survive tail cropping, so existing words never replay their entrance.
 struct LiveTranscriptText: View {
     let text: String
-    /// A replica in a settings card has no row to fill, so it hugs its sample
-    /// text, wrapped at `width` onto at most two lines and never trimmed.
     var hugs: Bool = false
-    /// How wide the words may run before they wrap, so the view can work out
-    /// how much of the tail fits.
     var width: CGFloat?
-
-    /// Three lines of 13 pt is as much as the pill can show without turning
-    /// into a window.
+    var animate = true
+    @State private var previousWordCount = 0
     static let maximumLines = 3
+    static let font = Font.system(size: 16, weight: .medium, design: .rounded)
 
-    /// The font the words are drawn in, and the one they are measured in.
-    static let font = Font.system(size: 13, weight: .medium, design: .rounded)
-
-    /// The text of the previous pass, for the settled/unsettled split. It is
-    /// only a colour, so lagging one pass behind costs nothing.
-    @State private var previous = ""
-
-    /// The part of the text that is shown: the whole of it while it fits in
-    /// three lines, and its tail once it does not. SwiftUI's own head
-    /// truncation is no use here — with a line limit it keeps the first lines
-    /// and ellipsises the last one, which shows the oldest words and the
-    /// newest ones with the middle missing — so the cut is made here, at a
-    /// word boundary, against the font's real metrics.
-    private var shown: String {
-        guard let width, !hugs else { return text }
-        return LiveTranscriptMetrics.tail(of: text, fittingLines: Self.maximumLines, width: width)
-    }
-
-    /// One `AttributedString` rather than two concatenated `Text`s, which
-    /// macOS 26 deprecates.
-    private var attributed: AttributedString {
-        let shown = shown
-        // The previous pass may have been trimmed to a different tail, so
-        // compare like with like from the end.
-        var stable = shown.commonPrefix(with: previous.suffix(shown.count))
-        // A prefix that stops inside a word would paint half of it grey, so
-        // back up to the end of the last whole word.
-        if stable.count < shown.count, let lastSpace = stable.lastIndex(where: \.isWhitespace) {
-            stable = String(stable[..<lastSpace])
-        }
-        var settled = AttributedString(stable)
-        settled.foregroundColor = .primary
-        var unsettled = AttributedString(shown.dropFirst(stable.count))
-        unsettled.foregroundColor = .secondary
-        return settled + unsettled
+    private var visibleWords: [(index: Int, text: String)] {
+        let all = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        let shown = width.map {
+            LiveTranscriptMetrics.tail(of: text, fittingLines: hugs ? 2 : Self.maximumLines, width: $0)
+        } ?? text
+        let tail = shown.split(whereSeparator: \.isWhitespace).map(String.init)
+        return tail.enumerated().map { (all.count - tail.count + $0.offset, $0.element) }
     }
 
     var body: some View {
-        Text(attributed)
-            .font(Self.font)
-            .multilineTextAlignment(.leading)
-            // A backstop only: `shown` has already been cut to fit.
-            .lineLimit(hugs ? 2 : Self.maximumLines)
-            // The row is a fixed width and the text takes what the dot and the
-            // meter leave of it, wrapping there. Its height is whatever that
-            // wrapping needs, one line to three, and the capsule grows with
-            // it; a fixed box would leave a single line stranded at an edge.
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(width: hugs ? width : nil, alignment: .leading)
-            .frame(maxWidth: hugs ? nil : .infinity, alignment: .leading)
-            .onChange(of: text) { old, _ in previous = old }
+        WordFlowLayout(spacing: 4, lineSpacing: 4) {
+            ForEach(visibleWords, id: \.index) { word in
+                RevealedWord(text: word.text, delay: animate ? min(0.35, Double(max(0, word.index - previousWordCount)) * 0.055) : 0, animate: animate)
+            }
+        }
+        .frame(width: hugs ? width : nil, alignment: .leading)
+        .frame(maxWidth: hugs ? nil : .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .onChange(of: text) { old, _ in previousWordCount = old.split(whereSeparator: \.isWhitespace).count }
+    }
+}
+
+private struct RevealedWord: View {
+    let text: String
+    let delay: Double
+    let animate: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var visible = false
+
+    var body: some View {
+        Text(text)
+            .font(LiveTranscriptText.font)
+            .foregroundStyle(.primary)
+            .opacity(visible || reduceMotion || !animate ? 1 : 0)
+            .blur(radius: visible || reduceMotion || !animate ? 0 : 2)
+            .task {
+                if animate && !reduceMotion { try? await Task.sleep(for: .seconds(delay)) }
+                guard !Task.isCancelled else { return }
+                withAnimation(reduceMotion || !animate ? nil : .easeOut(duration: 0.45)) { visible = true }
+            }
+    }
+}
+
+/// Word wrapping uses the same measurements for placement and height. The
+/// available width is fixed while recording, keeping the glass surface still.
+private struct WordFlowLayout: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    private func positions(_ subviews: Subviews, width: CGFloat) -> ([CGPoint], CGSize) {
+        var points: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxX: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + lineSpacing
+                rowHeight = 0
+            }
+            points.append(CGPoint(x: x, y: y))
+            maxX = max(maxX, x + size.width)
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return (points, CGSize(width: min(width, maxX), height: y + rowHeight))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        positions(subviews, width: proposal.width ?? 404).1
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (points, _) = positions(subviews, width: bounds.width)
+        for (view, point) in zip(subviews, points) {
+            view.place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y),
+                       anchor: .topLeading, proposal: .unspecified)
+        }
     }
 }
 
@@ -538,7 +561,7 @@ struct PillBackground: ViewModifier {
     /// disc in the middle of the row at once, and `AnyShape` cannot
     /// interpolate between two shape types, so the collapse would be over
     /// before it started.
-    private var shape: Capsule { Capsule() }
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 26, style: .continuous) }
 
     @ViewBuilder
     func body(content: Content) -> some View {

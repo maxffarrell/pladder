@@ -6,18 +6,14 @@ let package = Package(
     // The UI follows the macOS system language; English is the source
     // language, and the String Catalogs below need this to compile.
     defaultLocalization: "en",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS("27.0")],
     products: [
         .executable(name: "Pladder", targets: ["Pladder"]),
         .executable(name: "pladder-cli", targets: ["PladderCLI"]),
         .library(name: "PladderCore", targets: ["PladderCore"]),
     ],
     dependencies: [
-        // A fork of FluidAudio 0.15.6 (four commits on top of the revision this
-        // used to pin) adding `IncrementalChunkProcessor`: the batch engine's
-        // own windows, run while the user is still speaking. Offered upstream;
-        // when it lands, this goes back to the release line.
-        .package(url: "https://github.com/dinooo13/FluidAudio.git", branch: "incremental-chunks"),
+        .package(url: "https://github.com/apple/coreai-models.git", revision: "52c84ba874b2c57adcede08a671ce96ed1b3f433"),
     ],
     targets: [
         // Pure logic. Imports Foundation only, so tests stay fast and engines
@@ -41,7 +37,7 @@ let package = Package(
             name: "PladderEngines",
             dependencies: [
                 "PladderCore",
-                .product(name: "FluidAudio", package: "FluidAudio"),
+                .product(name: "CoreAISpeech", package: "coreai-models"),
             ]
         ),
 
@@ -71,6 +67,7 @@ let package = Package(
             resources: [
                 .process("Resources/Localizable.xcstrings"),
                 .process("Resources/InfoPlist.xcstrings"),
+                .copy("Resources/ThirdPartyNotices.txt"),
             ]
         ),
 
@@ -85,6 +82,7 @@ let package = Package(
             dependencies: ["PladderCore", "PladderEngines", "PladderAudio", "PladderBench", "PladderRefine", "PladderSystem"]
         ),
 
+        .testTarget(name: "PladderEnginesTests", dependencies: ["PladderEngines"]),
         .testTarget(name: "PladderCoreTests", dependencies: ["PladderCore"]),
         .testTarget(name: "PladderAudioTests", dependencies: ["PladderAudio"]),
         .testTarget(name: "PladderBenchTests", dependencies: ["PladderBench"]),

@@ -1,110 +1,43 @@
-<p align="center">
-  <img src="Assets/icon_1024.png" width="128" alt="Pladder icon">
-</p>
+# Pladder — Core AI fork
 
-<h1 align="center">Pladder</h1>
+Simple local dictation for Apple Silicon Macs, forked from [dinooo13/pladder](https://github.com/dinooo13/pladder). Hold the hotkey to speak and release to paste into the focused app. A toggle hotkey is also available.
 
-<p align="center">
-  <strong>Talk to your agents.</strong><br>
-  Push-to-talk dictation for macOS. Hold a key, say the prompt, let go.<br>
-  It's already in Claude Code, Codex, Cursor or OpenCode before you can reach for the Enter key.<br>
-  <br>
-  Insanely fast · 100% private · No data leaves your Mac
-</p>
+This fork requires **macOS 27 and Xcode 27**. Speech recognition uses Apple's [CoreAISpeech](https://github.com/apple/coreai-models) and Core AI framework. FluidAudio has been removed from the app and its dependencies.
 
-<p align="center">
-  <a href="INSTALL.md"><img src="https://img.shields.io/badge/macOS-26%2B-000000?logo=apple&logoColor=white" alt="macOS 26 or later"></a>
-  <a href="INSTALL.md"><img src="https://img.shields.io/badge/Apple%20Silicon-M1%20and%20up-000000?logo=apple&logoColor=white" alt="Apple Silicon"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-  <a href="https://github.com/dinooo13/pladder/actions/workflows/ci.yml"><img src="https://github.com/dinooo13/pladder/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-</p>
+Choose **Parakeet v3**, **Parakeet Ultra**, or **Parakeet Redux** in Settings → Engine. Each model downloads once from a pinned Hugging Face revision, with archive size and SHA-256 verification, then runs locally. Switching unloads the previous engine. Audio and transcripts stay on the Mac.
 
-<p align="center">
-  <a href="#install">Install</a> ·
-  <a href="#speed">Speed</a> ·
-  <a href="#private-by-construction">Privacy</a> ·
-  <a href="#built-for-agents">Agents</a> ·
-  <a href="docs/USAGE.md">Usage</a> ·
-  <a href="#faq">FAQ</a>
-</p>
+The default dictation HUD uses native SwiftUI Liquid Glass. Words agree across advancing streaming updates before appearing, with the unfinished trailing word withheld. Revealed words fade in and never change; the HUD shows the recent three lines. This is a stability heuristic, not calibrated recognition confidence. The final paste uses the full completed transcript, independently of the display gate. Reduce Motion disables word entrance effects.
 
-<p align="center">
-  <img src="docs/images/hero.gif" width="900" alt="Dictating a prompt into Claude Code with Pladder: hold Option+Space and speak while the Live pill shows the words, tap V to send, let go; the prompt is pasted and sent and Claude starts working">
-</p>
-
-<p align="center"><em>Hold. Release. Pasted.</em></p>
-
----
-
-You type long prompts all day. Speech is three to four times faster than typing, and the thing that has always made dictation annoying is waiting for it. Pladder is built around one number: the time between letting go of the key and the text appearing.
-
-## Speed
-
-**About 300 ms from letting go to pasted text, on an M1, the slowest chip Pladder runs on.** It does not matter whether you spoke for five seconds or five minutes: the recording is transcribed while you are still speaking, so by the time you release the key there is almost nothing left to do.
-
-The engine is NVIDIA's Parakeet TDT v3, running on the Neural Engine through [FluidAudio](https://github.com/FluidInference/FluidAudio). It loads at launch and stays loaded, so the first dictation after launch is as quick as the hundredth. Why it is fast is written up in [docs/PERFORMANCE.md](docs/PERFORMANCE.md); the measurement procedure and the full baseline are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
-
-## Private by construction
-
-Audio and text never leave the Mac. The microphone is open only while you hold the key, the transcript exists long enough to be pasted, and your clipboard is put back afterwards. There is no account, no telemetry and no update check. The only requests Pladder ever makes are one-time model downloads from Hugging Face: the speech model on first launch, and S1-mini by Superwhisper only if you pick it for polish. After that it works with Wi-Fi off. What Pladder does with your words, step by step, is in [docs/PRIVACY.md](docs/PRIVACY.md).
-
-## Built for agents
-
-Pladder pastes into whatever has focus, so it works in every terminal and editor: Claude Code, Codex and OpenCode, Cursor, and anything else with a text field. It was made for the loop where you talk to an agent, it works, and you talk again. Hold Option+Space, describe the change, tap V with the same hand, and let go: the prompt is pasted, Return is pressed, and the agent is running while your other hand never left the mouse.
-
-A dictionary fixes the words speech models get wrong: product names, libraries, commands, your project's jargon. "clode code" becomes "Claude Code", every time, at no cost in latency.
-
-## Install
-
-There is no download yet; Pladder builds from source in about a minute. It needs macOS 26 or later on Apple Silicon, and Xcode 26 to build:
+## Build
 
 ```sh
-git clone https://github.com/dinooo13/pladder.git
+git clone --branch codex/coreai-dictation https://github.com/maxffarrell/pladder.git
 cd pladder
-./scripts/bundle.sh --install --run
+./script/build_and_run.sh
 ```
 
-Grant Microphone and Accessibility when asked, wait for the speech model to download once, then hold **Option+Space** in any text field and speak. Signing, updating, troubleshooting and the command-line tool are in [INSTALL.md](INSTALL.md).
+The script builds and opens `dist/Pladder.app`. This path links to a signed local build outside synchronized Documents folders, avoiding File Provider metadata that breaks signing. Grant Microphone and Accessibility permissions when prompted. This fork has its own bundle identifier, `com.maxffarrell.pladder`. Your existing dictionary and hotkeys are retained; an unavailable old engine falls back to v3 and the new Live HUD.
 
-## What else it does
+For development, use `PLADDER_SETTINGS_PATH=/absolute/path/test-settings.json` to isolate settings. The Codex Run action invokes the same script.
 
-- **Your keys.** Record any push-to-talk key or send key by pressing it, or add a toggle key for long dictations. Escape discards a recording.
-- **It learns your words.** Correct a word by hand after a dictation and Pladder offers to add it to the dictionary, checked on device and added only when you say so.
-- **It skips over the ums.** "Uh", "um", "äh" and "eh" are dropped, and spoken punctuation such as "comma" or "new paragraph" becomes the mark.
-- **Polish, if you like.** An experimental on-device model turns "wait, no, Friday" into "Friday" before the paste.
-- **Twenty-five languages,** detected as you speak, with no setting to flip.
-- **Part of macOS.** A menu bar app with a Liquid Glass pill in four styles, and nothing in the Dock.
-- **Free and MIT.** The source is here. Read it, build it, change it.
+## Models and limitations
 
-All of it is described in [docs/USAGE.md](docs/USAGE.md).
+All three releases use FP16 weights and Apple's buffered streaming recipe: 12-second encoder windows, 0.96-second hops, and 2 seconds of future context. First words therefore take at least 2.96 seconds of audio plus inference and display stabilization. Core AI chooses available compute devices; this fork does not promise exclusive Neural Engine execution or better efficiency than FluidAudio. See [the conversion and validation report](docs/COREAI.md).
 
-## FAQ
+Redux's ternary weights are expanded before FP16 export. Its original 178 MB packed size and Photon's specialized kernel performance **do not apply** to this conversion. Each installed model is about 1.2 GB. Ultra and Redux's auxiliary Photon VAD heads are not used; the app captures audio through pauses and uses CoreAISpeech endpointing.
 
-**How is it different from Wispr Flow, Superwhisper or macOS dictation?**
-Pladder does one thing: push-to-talk, on-device, into any app, as fast as the hardware allows. There is no cloud path, no subscription and no account. It is open source, and the speed is benchmarked in the repository rather than claimed.
+The existing optional Apple Foundation Models polish remains available. HUD actions for Concise, Professional and Bulleted cleanup are the next phase, after the speech backend and HUD are qualified and committed.
 
-**Which Macs?**
-Any Apple Silicon Mac on macOS 26 or later. Benchmarks are taken on an M1, so every newer chip is faster.
+## Validation
 
-**Which languages?**
-The 25 European languages Parakeet TDT v3 supports, including English, German, French, Spanish, Italian, Portuguese, Dutch, Polish and Ukrainian.
+```sh
+swift test -c release
+./scripts/make-fixtures.sh
+PLADDER_COREAI_BUNDLE_ROOT=/absolute/path/exports .build/release/pladder-cli bench bench/fixtures --runs 3 --pause 1
+```
 
-**Option+Space is my Alfred or Raycast hotkey, or I type non-breaking spaces with it.**
-Both are lost while Pladder runs. Record another combination in Settings; see [push to talk](docs/USAGE.md#push-to-talk).
+`PLADDER_SPEECH_MODEL=v3|ultra|redux` selects the CLI model. `--paced --all --live` checks that displaying partial words leaves the final transcript identical to unpaced ingestion. Model exports and graph parity tools are in `tools/coreai/`.
 
-**Can another program use it for speech-to-text?**
-Yes. `pladder-cli` transcribes an audio file and prints only the text. [docs/HERMES.md](docs/HERMES.md) sets it up for Hermes Agent's voice messages.
+## Attribution
 
-## Contributing
-
-Issues and pull requests are welcome. The [CLAUDE.md](CLAUDE.md) file states what the project optimises for and the rule that every change on the release-to-paste path ships with a benchmark. [docs/BENCHMARKS.md](docs/BENCHMARKS.md) has the procedure.
-
-## The name
-
-*Pladder* is Low German (*Plattdeutsch*) for "to babble". You just pladder into the microphone and the text gets pasted.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
-
-Parakeet TDT is by NVIDIA (CC-BY-4.0). FluidAudio is by FluidInference (Apache-2.0).
+Pladder is MIT licensed, by its upstream contributors. Parakeet TDT v3 is by NVIDIA; Ultra and Redux are post-trained by Moondream. Model weights remain **CC-BY-4.0**, with pinned source revisions and conversion notices in each bundle. Apple's export recipe is **BSD-3-Clause**; its license is retained in `tools/coreai/APPLE_LICENSE`. Conversion changes precision, graph format and streaming shape; it does not train the models or imply endorsement.

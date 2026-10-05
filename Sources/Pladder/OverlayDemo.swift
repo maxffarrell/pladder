@@ -53,14 +53,14 @@ enum OverlayDemo {
     }
 
     private static func play(_ scenario: Scenario, style: OverlayStyle, speed: OverlayAnimationSpeed) async {
-        var settings = Settings(engineID: EchoEngine.engineID)
+        var settings = Settings(engineID: DemoStreamingEngine.engineID)
         settings.polishDictations = scenario.polish
         settings.overlayStyle = style
         settings.overlayAnimationSpeed = speed
         settings.playSounds = false
         let registry = EngineRegistry([
-            .init(id: EchoEngine.engineID, displayName: "Echo", detail: "") {
-                EchoEngine(text: scenario.text, delay: scenario.engineDelay)
+            .init(id: DemoStreamingEngine.engineID, displayName: "Echo", detail: "") {
+                DemoStreamingEngine(text: scenario.text, delay: scenario.engineDelay)
             }
         ])
         let coordinator = DictationCoordinator(
@@ -84,7 +84,7 @@ enum OverlayDemo {
 
         log("\(scenario.name) press")
         await coordinator.hotkeyPressed()
-        try? await Task.sleep(for: .seconds(2))
+        try? await Task.sleep(for: .seconds(style == .liveTranscript ? 5 : 2))
         log("\(scenario.name) release")
         coordinator.hotkeyReleased()
         var last = "recording"
@@ -182,4 +182,34 @@ private final class DemoHotkey: HotkeyMonitor, @unchecked Sendable {
     }
     func stop() {}
     func setCancelKeyEnabled(_ enabled: Bool) {}
+}
+
+/// Exercises committed-word entrances through the real display loop, without
+/// models, microphone, keyboard injection or insertion into another app.
+private actor DemoStreamingEngine: StreamingTranscriptionEngine {
+    static let engineID = EngineID("demo-streaming")
+    nonisolated let id = engineID
+    nonisolated let displayName = "Demo"
+    private(set) var status: EngineStatus = .unloaded
+    private let text: String
+    private let delay: Duration
+    private var started = ContinuousClock.now
+    init(text: String, delay: Duration) { self.text = text; self.delay = delay }
+    func load() { status = .ready }
+    func unload() { status = .unloaded }
+    func beginUtterance() { started = .now }
+    func feed(_ samples: [Float]) {}
+    func abandonUtterance() {}
+    func livePass() -> String? {
+        let elapsed = ContinuousClock.now - started
+        let count = max(0, Int(Double(elapsed.components.seconds) * 2
+            + Double(elapsed.components.attoseconds) / 1e18 * 2))
+        return text.split(whereSeparator: \.isWhitespace).prefix(count).joined(separator: " ")
+    }
+    func endUtterance(_ tail: [Float]) async throws -> Transcript { try await transcribe(tail) }
+    func transcribe(_ samples: [Float]) async throws -> Transcript {
+        try await Task.sleep(for: delay)
+        return Transcript(text: text, audioDuration: Double(samples.count) / 16_000,
+                          processingTime: 0, engineID: id)
+    }
 }

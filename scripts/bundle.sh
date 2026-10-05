@@ -29,7 +29,14 @@ for arg in "$@"; do
 	esac
 done
 
-APP="$ROOT/dist/Pladder.app"
+APP_LINK="$ROOT/dist/Pladder.app"
+CHECKOUT_ID=$(printf '%s' "$ROOT" | shasum -a 256 | cut -c1-12)
+APP_OUT="/private/tmp/pladder-coreai-$UID/$CHECKOUT_ID/Pladder.app"
+# File Provider can attach FinderInfo while signing inside Documents. Assemble
+# and sign outside the synchronized folder, then copy the signed app back.
+BUILD_STAGE=$(mktemp -d /private/tmp/pladder-bundle.XXXXXX)
+trap 'rm -rf "$BUILD_STAGE"' EXIT
+APP="$BUILD_STAGE/Pladder.app"
 CONTENTS="$APP/Contents"
 
 # Info.plist lives under Sources/Pladder/Resources and is excluded from the
@@ -63,6 +70,8 @@ cp "$ROOT/Assets/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
 # SwiftPM emits one .bundle per target that declares resources.
 shopt -s nullglob
 for bundle in "$BIN_DIR"/*.bundle; do
+	# SwiftPM can leave removed dependencies in an existing build directory.
+	[[ "$(basename "$bundle")" == FluidAudio_* ]] && continue
 	cp -R "$bundle" "$CONTENTS/Resources/"
 done
 
@@ -98,6 +107,8 @@ RUNTIME=(--options runtime)
 if [[ "$CODESIGN_IDENTITY" == "-" ]]; then
 	RUNTIME=()
 fi
+# Strip Finder metadata copied from SwiftPM resources before signing.
+xattr -cr "$APP"
 # Inside out: the framework first, with the same identity.
 codesign --force --sign "$CODESIGN_IDENTITY" \
 	${RUNTIME[@]+"${RUNTIME[@]}"} \
@@ -109,10 +120,21 @@ codesign --force --sign "$CODESIGN_IDENTITY" \
 	--timestamp=none \
 	"$APP"
 
+mkdir -p "$(dirname "$APP_OUT")" "$ROOT/dist"
+rm -rf "$APP_OUT"
+ditto --norsrc --noextattr "$APP" "$APP_OUT"
+# A symlink keeps File Provider from reattaching forbidden FinderInfo inside
+# the signed bundle. Applications installed via --install are ordinary copies.
+rm -rf "$APP_LINK"
+ln -s "$APP_OUT" "$APP_LINK"
+APP="$APP_OUT"
+codesign --verify --deep --strict "$APP"
 echo "Built $APP"
 
 if [[ "$INSTALL" -eq 1 ]]; then
-	pkill -x Pladder 2>/dev/null || true
+	while IFS= read -r pid; do
+		[[ -n "$pid" ]] && kill "$pid"
+	done < <(pgrep -f '^/Applications/Pladder.app/Contents/MacOS/Pladder([[:space:]]|$)' || true)
 	rm -rf /Applications/Pladder.app
 	cp -R "$APP" /Applications/Pladder.app
 	APP=/Applications/Pladder.app

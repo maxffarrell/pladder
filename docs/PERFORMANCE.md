@@ -1,5 +1,7 @@
 # Performance
 
+> Historical upstream FluidAudio measurements. For this Core AI fork, see [COREAI.md](COREAI.md).
+
 How Pladder gets from key-release to pasted text in under a quarter of a
 second. For the measurement procedure and raw numbers, see
 [BENCHMARKS.md](BENCHMARKS.md).

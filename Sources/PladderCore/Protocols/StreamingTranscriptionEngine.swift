@@ -14,14 +14,8 @@ public protocol StreamingTranscriptionEngine: TranscriptionEngine {
     /// Brings the engine's compute up to speed while the user is still
     /// speaking, before the first real work arrives. Fire and forget.
     func warmPass() async
-    /// A pass over the audio fed so far, for display only. It costs what
-    /// `warmPass` costs — the same padded window through the same call — so an
-    /// engine answering this is warmed by it, and the coordinator runs one
-    /// loop or the other, never both.
-    ///
-    /// The text is what a release right now would produce, never what the
-    /// release will produce, and it never reaches the output. Nil when there
-    /// is nothing to show.
+    /// Display-only committed text from advancing streaming updates. This
+    /// never changes decoding state or the final transcript sent to output.
     func livePass() async -> String?
 }
 

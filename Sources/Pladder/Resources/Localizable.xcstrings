@@ -681,12 +681,12 @@
         }
       }
     },
-    "NVIDIA Parakeet via FluidAudio, runs on the Neural Engine. ~700 MB download on first use.": {
+    "Apple Core AI · on-device · 25 languages": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NVIDIA Parakeet über FluidAudio, läuft auf der Neural Engine. Beim ersten Start ca. 700 MB Download."
+            "value": "Apple Core AI · lokal · 25 Sprachen"
           }
         }
       }

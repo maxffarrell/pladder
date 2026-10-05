@@ -18,7 +18,7 @@ final class OverlayPanel: NSPanel {
     /// needs room for its text — asks for more.
     private static func size(for style: OverlayStyle) -> NSSize {
         switch style {
-        case .liveTranscript: NSSize(width: 480, height: 140)
+        case .liveTranscript: NSSize(width: 480, height: 190)
         case .menuBar, .minimal, .compact: NSSize(width: 320, height: 96)
         }
     }

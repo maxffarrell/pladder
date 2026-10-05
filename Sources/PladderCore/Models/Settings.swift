@@ -6,9 +6,8 @@ public enum Appearance: String, Codable, Sendable, CaseIterable, Equatable {
     case system, light, dark
 }
 
-/// Which overlay the pill shows while dictating. `liveTranscript` is the only
-/// one that costs anything: it runs a pass over the audio so far four times a
-/// second, in place of the warm pass the other styles run every two seconds.
+/// Which interface appears while dictating. Live Transcript reads stable
+/// words from the stream without an additional inference pass.
 public enum OverlayStyle: String, Codable, Sendable, CaseIterable, Equatable {
     case menuBar, minimal, compact, liveTranscript
 }
@@ -98,7 +97,7 @@ public struct Settings: Codable, Sendable, Equatable {
         playSounds: Bool = true,
         muteOutputWhileDictating: Bool = false,
         appearance: Appearance = .system,
-        overlayStyle: OverlayStyle = .compact,
+        overlayStyle: OverlayStyle = .liveTranscript,
         overlayGlass: Bool = true,
         overlayAnimationSpeed: OverlayAnimationSpeed = .quick
     ) {
